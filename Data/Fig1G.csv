@@ -1,0 +1,19 @@
+﻿type,value,treatment,experiment,Replicate
+Heat,0.277777778,Free algae,1,1
+Heat,0.722222222,Symbiotic algae,1,1
+Heat,1,Host cells,1,1
+Heat,0.275862069,Free algae,1,2
+Heat,0.724137931,Symbiotic algae,1,2
+Heat,1,Host cells,1,2
+Heat,0.292682927,Free algae,1,3
+Heat,0.707317073,Symbiotic algae,1,3
+Heat,1,Host cells,1,3
+Heat,0.357142857,Free algae,2,1
+Heat,0.642857143,Symbiotic algae,2,1
+Heat,1,Host cells,2,1
+Heat,0.111111111,Free algae,2,2
+Heat,0.888888889,Symbiotic algae,2,2
+Heat,1,Host cells,2,2
+Heat,0.1,Free algae,2,3
+Heat,0.9,Symbiotic algae,2,3
+Heat,1,Host cells,2,3

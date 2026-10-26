@@ -1,0 +1,13 @@
+﻿type,value,treatment,experiment,Replicate
+Heat,0,Dissociated,1,1
+Heat,0.166666667,Expelled,1,1
+Heat,0,Dissociated,1,2
+Heat,0.392857143,Expelled,1,2
+Heat,0.041666667,Dissociated,1,3
+Heat,0.375,Expelled,1,3
+Heat,0.076923077,Dissociated,2,1
+Heat,0.333333333,Expelled,2,1
+Heat,0.076923077,Dissociated,2,2
+Heat,0.461538462,Expelled,2,2
+Heat,0,Dissociated,2,3
+Heat,0.227272727,Expelled,2,3

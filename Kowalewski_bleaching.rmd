@@ -1,0 +1,1197 @@
+---
+title: "Analyses for Kowalewski et al."
+author: "Griffin Kowalewski"
+date: "2026-10-22"
+output:
+ github_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+#Plotting for Figure 1C
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(extrafont)
+library(ggbreak)
+
+
+# Load and preprocess
+ all_data = as.data.frame(read.csv(file="Data/Fig1C.csv", header = T))
+ all_data$experiment <- factor(all_data$experiment)
+ 
+# Add treatment formatting
+all_data <- all_data %>%
+  mutate(
+    treatment = factor(treatment),
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8),
+    treatment_num = as.numeric(treatment)
+  )
+
+# Calculate bar means and SE manually
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(
+    mean_val = mean(value, na.rm = TRUE),
+    se_val = sd(value, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+set.seed(123)
+# Plot
+ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = 0.65, size = 0.2) +
+
+  geom_errorbar(data = bar_means,
+                aes(x = treatment_num, ymin = mean_val - se_val, ymax = mean_val + se_val),
+                width = 0.2, size = 0.2, color = "black") +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2),
+             size = 1.0, alpha = 0.8, stroke = NA) +
+
+  scale_x_continuous(
+    breaks = sort(unique(all_data$treatment_num)),
+    labels = bar_means$treatment_wrapped,
+    expand = expansion(mult = c(0.06, .35))
+  ) +
+
+  scale_y_continuous(limits = c(-.01, 5), expand = expansion(mult = c(0, 0.05))) +
+  scale_color_manual(values = c("1" = "#0A9F9D", "2" = "#E54E21", "3" = "#6C8645")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 6),  # Fallback if Arial not installed
+    axis.text.x = element_text(size = 6, color = "black"),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.line = element_line(color = 'black', size = 0.3),
+    axis.ticks = element_line(size = 0.3),
+    plot.margin = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("Total number of cells per second") +
+  coord_cartesian(clip = "off", xlim = c(0.8, 6.4))
+
+#Save the plot
+ggsave("Fig1C.pdf",
+       path = "Figures",
+       width = 4, height = 5, units = "in", dpi = 300)
+```
+#Stats for Figure 1C
+```{r}
+anova(aov(all_data$value ~ all_data$treatment_wrapped))
+TukeyHSD(aov(all_data$value ~ all_data$treatment_wrapped))
+```
+#Plotting for Figure 1F and 1G
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(scales)
+
+# Load data
+all_data <- read.csv(file = "Data/Fig1F.csv", header = TRUE)
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+all_data <- all_data %>%
+  mutate(treatment = str_trim(as.character(treatment))) %>%       # tidy labels
+  filter(!is.na(treatment), treatment != "", !is.na(value)) %>%   # drop blank rows
+  filter(!str_detect(treatment, regex("host", ignore_case = TRUE))) %>%  # REMOVE host cells
+  mutate(
+    treatment         = droplevels(factor(treatment)),
+    treatment_num     = as.integer(treatment),
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8)
+  )
+
+# Recalculate bar means (ordered to match the x positions)
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(treatment_num)
+
+# Plot
+p <- ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = 0.9, linewidth = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4,
+             alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               linewidth = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = bar_means$treatment_num,
+    labels = bar_means$treatment_wrapped,
+    expand = expansion(add = 0.6)   # even padding on both sides
+  ) +
+
+  scale_y_continuous(
+    limits = c(0, 1.0),
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) x * 100
+  ) +
+
+  scale_color_manual(values = c("1" = "#0A9F9D", "2" = "#E54E21")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x  = element_text(size = 6, color = "black"),
+    axis.text.y  = element_text(size = 6, color = "black"),
+    axis.line    = element_line(color = "black", linewidth = 0.3),
+    axis.ticks   = element_line(linewidth = 0.3),
+    plot.margin  = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("Percent of algae (%)")
+
+p
+
+ggsave("Fig1F.pdf", plot = p, path = "Figures",
+       width = 2, height = 1.8, units = "in", dpi = 300)
+```
+#Stats for Figure 1F
+```{r}
+a <- all_data %>%
+  filter(treatment_wrapped == 'Symbiotic\nalgae') %>%
+  pull(value)
+
+
+b <- all_data %>%
+  filter(treatment_wrapped == 'Free\nalgae') %>%
+  pull(value)
+
+t.test(a,b, var.equal=TRUE, paired = TRUE)
+```
+
+#Plot for Figure 1G
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(scales)
+
+# Load data
+all_data <- read.csv(file = "Data/Fig1G.csv", header = TRUE)
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+all_data <- all_data %>%
+  mutate(treatment = str_trim(as.character(treatment))) %>%       # tidy labels
+  filter(!is.na(treatment), treatment != "", !is.na(value)) %>%   # drop blank rows
+  filter(!str_detect(treatment, regex("host", ignore_case = TRUE))) %>%  # REMOVE host cells
+  mutate(
+    treatment         = droplevels(factor(treatment)),
+    treatment_num     = as.integer(treatment),
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8)
+  )
+
+# Recalculate bar means (ordered to match the x positions)
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(treatment_num)
+
+# Plot
+p <- ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = 0.9, linewidth = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4,
+             alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               linewidth = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = bar_means$treatment_num,
+    labels = bar_means$treatment_wrapped,
+    expand = expansion(add = 0.6)   # even padding on both sides
+  ) +
+
+  scale_y_continuous(
+    limits = c(0, 1.0),
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) x * 100
+  ) +
+
+  scale_color_manual(values = c("1" = "#0A9F9D", "2" = "#E54E21")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x  = element_text(size = 6, color = "black"),
+    axis.text.y  = element_text(size = 6, color = "black"),
+    axis.line    = element_line(color = "black", linewidth = 0.3),
+    axis.ticks   = element_line(linewidth = 0.3),
+    plot.margin  = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("Percent of algae (%)")
+
+p
+
+ggsave("Fig1G.pdf", plot = p, path = "Figures",
+       width = 2, height = 1.8, units = "in", dpi = 300)
+```
+
+#Stats for Figure 1G
+```{r}
+a <- all_data %>%
+  filter(treatment_wrapped == 'Symbiotic\nalgae') %>%
+  pull(value)
+
+
+b <- all_data %>%
+  filter(treatment_wrapped == 'Free\nalgae') %>%
+  pull(value)
+
+t.test(a,b, var.equal=TRUE, paired = TRUE)
+```
+
+
+#Plotting for Figure 1J
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(scales)
+
+# Load data
+all_data <- read.csv(file = "Data/Fig1J.csv", header = TRUE)
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+all_data <- all_data %>%
+  mutate(treatment = str_trim(as.character(treatment))) %>%       # tidy labels
+  filter(!is.na(treatment), treatment != "", !is.na(value)) %>%   # drop blank rows
+  filter(!str_detect(treatment, regex("host", ignore_case = TRUE))) %>%  # REMOVE host cells
+  mutate(
+    treatment         = droplevels(factor(treatment)),
+    treatment_num     = as.integer(treatment),
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8)
+  )
+
+# Recalculate bar means (ordered to match the x positions)
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(treatment_num)
+
+# Plot
+p <- ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = 0.9, linewidth = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4,
+             alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               linewidth = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = bar_means$treatment_num,
+    labels = bar_means$treatment_wrapped,
+    expand = expansion(add = 0.6)   # even padding on both sides
+  ) +
+
+  scale_y_continuous(
+    limits = c(0, 1.0),
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) x * 100
+  ) +
+
+  scale_color_manual(values = c("1" = "#0A9F9D", "2" = "#E54E21")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x  = element_text(size = 6, color = "black"),
+    axis.text.y  = element_text(size = 6, color = "black"),
+    axis.line    = element_line(color = "black", linewidth = 0.3),
+    axis.ticks   = element_line(linewidth = 0.3),
+    plot.margin  = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("Percent of algae (%)")
+
+p
+
+ggsave("Fig1J.pdf", plot = p, path = "Figures",
+       width = 2, height = 1.8, units = "in", dpi = 300)
+
+```
+#Stats for Figure 1J
+```{r}
+a <- all_data %>%
+  filter(treatment_wrapped == 'Symbiotic\nalgae') %>%
+  pull(value)
+
+
+b <- all_data %>%
+  filter(treatment_wrapped == 'Free\nalgae') %>%
+  pull(value)
+
+t.test(a,b, var.equal=TRUE, paired = TRUE)
+```
+#Plotting for Figure 2B
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(scales)
+
+# Load data
+all_data <- read.csv(file = "Data/Fig2B.csv", header = TRUE)
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+# Clean and convert treatment to factor
+all_data <- all_data %>%
+  mutate(treatment = str_trim(as.character(treatment))) %>%
+  filter(!is.na(treatment), treatment != "", !is.na(value)) %>%   # drop blank rows
+  mutate(
+    treatment         = droplevels(factor(treatment)),
+    treatment_num     = as.integer(treatment),
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8)
+  )
+
+# Bar means (ordered to match x positions)
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(treatment_num)
+
+n_bars <- nrow(bar_means)
+
+# Plot
+p <- ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = 0.9, linewidth = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4,
+             alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               linewidth = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = bar_means$treatment_num,
+    labels = bar_means$treatment_wrapped,
+    limits = c(0.5, n_bars + 0.5),   # exactly the outer edges of the bars
+    expand = c(0, 0)                 # no extra padding
+  ) +
+
+  scale_y_continuous(limits = c(-0.01, 10),
+                     expand = expansion(mult = c(0, 0.05))) +
+
+  scale_color_manual(values = c("1" = "black", "2" = "black")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x  = element_text(size = 6, color = "black"),
+    axis.text.y  = element_text(size = 6, color = "black"),
+    axis.line    = element_line(color = "black", linewidth = 0.3),
+    axis.ticks   = element_line(linewidth = 0.3),
+    plot.margin  = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab(expression("Mean area (" * mu * m^2 * ")")) +
+  coord_cartesian(clip = "off")
+
+p
+
+ggsave("Fig2B.pdf", plot = p, path = "Figures",
+       width = 2, height = 1.8, units = "in", dpi = 300)
+
+```
+#Stats for Figure 2B
+```{r}
+a <- all_data %>%
+  filter(treatment_wrapped == 'Dissociated') %>%
+  pull(value)
+
+
+b <- all_data %>%
+  filter(treatment_wrapped == 'Expelled') %>%
+  pull(value)
+
+t.test(a,b, var.equal=TRUE)
+```
+#Plotting for Figure 2C
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)  # Needed for str_wrap()
+library(scales)
+
+# Load data
+all_data <- as.data.frame(read.csv(
+  file = "Data/Fig2C.csv",
+  header = TRUE
+))
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+# Convert treatment to factor
+all_data <- all_data %>%
+  mutate(treatment = factor(treatment)) %>%
+  mutate(
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8),
+    treatment_num = as.numeric(treatment)
+  )
+
+# Recalculate bar_means after filtering
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+# Plot
+ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = .9, size = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4, alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               size = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = sort(unique(all_data$treatment_num)),
+    labels = bar_means$treatment_wrapped
+  ) +
+
+  scale_y_continuous(
+  limits = c(0, 1.0),
+  expand = expansion(mult = c(0, 0.05)),
+  labels = function(x) x * 100  # Remove percent sign
+) +
+
+  scale_color_manual(values = c("1" = "#0A9F9D", "2" = "#E54E21")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x = element_text(size = 6, color = "black"),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.line = element_line(color = 'black', size = 0.3),
+    axis.ticks = element_line(size = 0.3),
+    plot.margin = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("Percent of fragmented nuclei(%)")
+# Save the plot
+ggsave("Fig2C.pdf",
+      path = "Figures",
+      width = 2, height = 1.8, units = "in", dpi = 300)
+
+```
+#Stats for Figure 2C
+```{r}
+a <- all_data %>%
+  filter(treatment_wrapped == 'Dissociated') %>%
+  pull(value)
+
+
+b <- all_data %>%
+  filter(treatment_wrapped == 'Expelled') %>%
+  pull(value)
+
+t.test(a,b, var.equal=TRUE)
+```
+
+#Plotting for Figure 2E
+```{r}
+#Plotting for Figure 2E and S8C
+
+library(dplyr)
+library(ggplot2)
+library(stringr)  # Needed for str_wrap()
+library(scales)
+
+# Load data
+all_data <- as.data.frame(read.csv(
+  file = "Data/Fig2E.csv",
+  header = TRUE
+))
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+# Convert treatment to factor
+all_data <- all_data %>%
+  mutate(treatment = factor(treatment)) %>% 
+  mutate(
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8),
+    treatment_num = as.numeric(treatment)
+  )
+
+# Recalculate bar_means after filtering
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+# Plot
+ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = .9, size = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4, alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               size = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = sort(unique(all_data$treatment_num)),
+    labels = bar_means$treatment_wrapped
+  ) +
+
+scale_y_continuous(limits = c(-.01, 12), expand = expansion(mult = c(0, 0.05))) +
+
+  scale_color_manual(values = c("1" = "#009E73", "2" = "#D55E00", "3" = "#56B4E9")) +
+
+  
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x = element_text(size = 6, color = "black"),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.line = element_line(color = 'black', size = 0.3),
+    axis.ticks = element_line(size = 0.3),
+    plot.margin = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("") 
+# Save the plot
+ggsave("Fig2E.pdf",
+     path = "Figures",
+     width = 2, height = 1.8, units = "in", dpi = 300)
+```
+#Stats for Figure 2E 
+```{r}
+#Stats for Figure 2E and S8C
+
+library(rstatix)
+
+a <- all_data %>%
+  filter(treatment_wrapped == 'Ambient_b01') %>%
+  pull(value)
+
+shapiro.test(a)
+
+wilcox_test(value ~ treatment_wrapped, data = all_data, paired = FALSE)
+```
+
+#Plotting for Figure S8C
+```{r}
+#Plotting for Figure 2E and S8C
+
+library(dplyr)
+library(ggplot2)
+library(stringr)  # Needed for str_wrap()
+library(scales)
+
+# Load data
+all_data <- as.data.frame(read.csv(
+  file = "Data/FigS8C.csv",
+  header = TRUE
+))
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+# Convert treatment to factor
+all_data <- all_data %>%
+  mutate(treatment = factor(treatment)) %>% 
+  mutate(
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8),
+    treatment_num = as.numeric(treatment)
+  )
+
+# Recalculate bar_means after filtering
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+# Plot
+ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = .9, size = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4, alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+               fun.data = mean_se, geom = "errorbar", width = 0.2,
+               size = 0.2, color = "black") +
+
+  scale_x_continuous(
+    breaks = sort(unique(all_data$treatment_num)),
+    labels = bar_means$treatment_wrapped
+  ) +
+
+scale_y_continuous(limits = c(-.01, 12), expand = expansion(mult = c(0, 0.05))) +
+
+  scale_color_manual(values = c("1" = "#009E73", "2" = "#D55E00", "3" = "#56B4E9")) +
+
+  
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x = element_text(size = 6, color = "black"),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.line = element_line(color = 'black', size = 0.3),
+    axis.ticks = element_line(size = 0.3),
+    plot.margin = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("") 
+# Save the plot
+ggsave("FigS8C.pdf",
+     path = "Figures",
+     width = 2, height = 1.8, units = "in", dpi = 300)
+```
+
+#Stats for Figure S8C
+```{r}
+#Stats for Figure 2E and S8C
+
+library(rstatix)
+
+a <- all_data %>%
+  filter(treatment_wrapped == 'Ambient_a01') %>%
+  pull(value)
+
+shapiro.test(a)
+
+wilcox_test(value ~ treatment_wrapped, data = all_data, paired = FALSE)
+```
+
+#Plotting for Figure 2G and S8D
+```{r}
+library(dplyr)
+library(ggplot2)
+library(boot)
+
+# Load data
+all_data <- read.csv(
+  "Data/Fig2G.csv",
+  header = TRUE
+)
+
+# Ensure 'location' is a factor
+all_data$location <- factor(all_data$location)
+
+sum_in <- sum(all_data$value[all_data$location == "in"], na.rm = TRUE)
+sum_in
+
+sum_out <- sum(all_data$value[all_data$location == "out"], na.rm = TRUE)
+sum_out
+
+
+summary_data <- all_data %>%
+  group_by(location) %>%
+  summarise(total_value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(percent = total_value / sum(total_value) * 100)
+
+
+ggplot(summary_data, aes(x = " ", y = percent, fill = location)) +
+  geom_col(color = "black", width = 0.45, size = 0.25) +
+
+
+  geom_text(
+    aes(label = paste0(round(percent), "%")),
+    position = position_stack(vjust = 0.5),
+    color = "black", size = 3
+  ) +
+
+  scale_y_continuous(
+    labels = scales::number_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.02)),
+    limits = c(0, 100)
+  ) +
+
+  scale_fill_manual(
+    values = c("in" = "#595959", "out" = "#CCCCCC"),
+    labels = c("in" = "Inside tissue", "out" = "Outside tissue")
+  ) +
+
+  ylab("Algae with caspase positive symbiocytes") +
+  xlab("") +
+
+  # Theme customization
+  theme_classic(base_size = 6) +
+  theme(
+    text = element_text(),
+    axis.title.y = element_text(size = 6, margin = margin(r = 2)),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.line = element_line(color = "black", size = 0.25),
+    axis.ticks = element_line(size = 0.25),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6, color = "black"),
+    legend.key.size = unit(.3, "cm"),
+    legend.position = c(1.4, 1.0),  # outside top-right
+    legend.justification = "top",
+    legend.box = "none",
+    plot.margin = margin(2, 2, 2, 2, "pt")
+  )
+
+ggsave("Fig2G.pdf",
+       path = "Figures",
+       width = 1.0, height = 1.08, units = "in", dpi = 600)
+
+```
+
+#Plotting for Figure S8D
+```{r}
+library(dplyr)
+library(ggplot2)
+library(boot)
+
+# Load data
+all_data <- read.csv(
+  "Data/FigS8D.csv",
+  header = TRUE
+)
+
+# Ensure 'location' is a factor
+all_data$location <- factor(all_data$location)
+
+sum_in <- sum(all_data$value[all_data$location == "in"], na.rm = TRUE)
+sum_in
+
+sum_out <- sum(all_data$value[all_data$location == "out"], na.rm = TRUE)
+sum_out
+
+
+summary_data <- all_data %>%
+  group_by(location) %>%
+  summarise(total_value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(percent = total_value / sum(total_value) * 100)
+
+
+ggplot(summary_data, aes(x = " ", y = percent, fill = location)) +
+  geom_col(color = "black", width = 0.45, size = 0.25) +
+
+
+  geom_text(
+    aes(label = paste0(round(percent), "%")),
+    position = position_stack(vjust = 0.5),
+    color = "black", size = 3
+  ) +
+
+  scale_y_continuous(
+    labels = scales::number_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.02)),
+    limits = c(0, 100)
+  ) +
+
+  scale_fill_manual(
+    values = c("in" = "#595959", "out" = "#CCCCCC"),
+    labels = c("in" = "Inside tissue", "out" = "Outside tissue")
+  ) +
+
+  ylab("Algae with caspase positive symbiocytes") +
+  xlab("") +
+
+  # Theme customization
+  theme_classic(base_size = 6) +
+  theme(
+    text = element_text(),
+    axis.title.y = element_text(size = 6, margin = margin(r = 2)),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.line = element_line(color = "black", size = 0.25),
+    axis.ticks = element_line(size = 0.25),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6, color = "black"),
+    legend.key.size = unit(.3, "cm"),
+    legend.position = c(1.4, 1.0),  # outside top-right
+    legend.justification = "top",
+    legend.box = "none",
+    plot.margin = margin(2, 2, 2, 2, "pt")
+  )
+
+ggsave("FigS8D.pdf",
+       path = "Figures",
+       width = 1.0, height = 1.08, units = "in", dpi = 600)
+
+```
+
+
+#Plotting for Figure 3B
+```{r}
+#Plotting for Figure 3B
+
+# Libraries
+library(ggplot2)
+library(dplyr)
+library(hrbrthemes)
+
+# Load data
+all_data <- as.data.frame(read.csv(
+  file = "Data/Fig3B.csv",
+  header = TRUE
+))
+
+all_data <- all_data %>%
+mutate(treatment_num = suppressWarnings(as.numeric(gsub("[^0-9.-]", "", as.character(treatment)))))
+
+colors <- c(heat = "#E41A1C", control = "#377EB8")
+
+agg <- all_data %>%
+filter(type %in% c("a01", "b01"),
+stress %in% c("heat", "control")) %>%
+group_by(type, stress, treatment_num) %>%
+summarize(
+mean_value = mean(value, na.rm = TRUE),
+n          = sum(!is.na(value)),
+sem_value  = sd(value, na.rm = TRUE) / sqrt(n),
+.groups = "drop"
+) %>%
+arrange(type, stress, treatment_num)
+
+rep_data <- all_data %>%
+filter(type %in% c("a01", "b01"),
+stress %in% c("heat", "control")) %>%
+group_by(type, stress, experiment, Replicate, treatment_num) %>%
+summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+arrange(type, stress, experiment, Replicate, treatment_num)
+
+all_data <- all_data %>%
+mutate(type = factor(type, levels = rev(sort(unique(type)))))
+
+agg <- agg %>%
+mutate(type = factor(type, levels = rev(sort(unique(type)))))
+
+rep_data <- rep_data %>%
+mutate(type = factor(type, levels = rev(sort(unique(type)))))
+
+ggplot() +
+geom_ribbon(
+data = agg,
+aes(x = treatment_num, ymin = mean_value - sem_value, ymax = mean_value + sem_value, fill = stress),
+alpha = 0.20, colour = NA, show.legend = FALSE, na.rm = TRUE
+) +
+geom_line(
+data = agg,
+aes(x = treatment_num, y = mean_value, colour = stress, group = stress),
+size = 1
+) +
+geom_point(
+data = agg,
+aes(x = treatment_num, y = mean_value, colour = stress),
+size = 2
+) +
+facet_wrap(~ type, ncol = 1) +
+scale_colour_manual(values = colors) +
+scale_fill_manual(values = colors) +
+scale_x_continuous(breaks = sort(unique(na.omit(agg$treatment_num)))) +
+labs(
+y = "Log of alga movement relative to control at each timepoint",
+x = "Time since initiation of heat (hours)",
+colour = "Stress"
+) +
+theme_minimal() +
+theme(
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+panel.background = element_rect(fill = "white", colour = NA),
+axis.line = element_line(color = "black"),
+axis.ticks = element_line(color = "black"),
+axis.text = element_text(color = "black"),
+axis.title = element_text(color = "black")
+)
+ggsave("Fig3B.pdf",
+     path = "Figures",
+     width = 5, height = 5, units = "in", dpi = 300)
+```
+#Stats for Figure 3B
+```{r}
+#Stats for Figure 3B
+
+library(tidyverse)
+library(rstatix)
+library(ggpubr)
+
+stat.test1 <- rep_data %>%
+  filter(type == 'b01') %>%
+  group_by(treatment_num) %>%
+  t_test(value ~ stress) %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance()
+stat.test1
+
+stat.test2 <- rep_data %>%
+  filter(type == 'a01') %>%
+  group_by(treatment_num) %>%
+  t_test(value ~ stress) %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance()
+stat.test2
+
+```
+#Plotting for Figure 3D
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(scales)
+library(ggpubr)   # for ggarrange(); install.packages("ggpubr") if needed
+
+# x-axis order
+treatment_order <- c("Ambient_b01", "Heat_b01", "Ambient_a01", "Heat_a01")
+
+# Colors for experiments
+exp_colors <- c(
+  "1" = "#009E73", "2" = "#D55E00", "3" = "#56B4E9", "4" = "#E69F00",
+  "5" = "#000000", "6" = "#0072B2", "7" = "#CC79A7", "8" = "#999999"
+)
+
+# ---- Load and clean one data file ----
+load_data <- function(file) {
+  all_data <- read.csv(file = file, header = TRUE) %>%
+    mutate(
+      treatment  = str_trim(as.character(treatment)),
+      experiment = factor(experiment)
+    ) %>%
+    filter(!is.na(treatment), treatment != "", !is.na(value))
+
+  unmatched <- setdiff(unique(all_data$treatment), treatment_order)
+  if (length(unmatched) > 0) {
+    warning("In ", file, ", these treatments are not in treatment_order and were dropped: ",
+            paste(unmatched, collapse = ", "))
+  }
+
+  all_data %>%
+    filter(treatment %in% treatment_order) %>%
+    mutate(
+      treatment         = factor(treatment, levels = treatment_order),
+      treatment_num     = as.integer(treatment),
+      treatment_wrapped = str_wrap(as.character(treatment), width = 8)
+    )
+}
+
+# ---- Function to build one bar plot ----
+make_bar_plot <- function(file, y_label, y_limits = NULL) {
+
+    all_data <- load_data(file)
+
+  # Means and standard errors per treatment
+  bar_means <- all_data %>%
+    group_by(treatment, treatment_num, treatment_wrapped) %>%
+    summarise(
+      mean_val = mean(value, na.rm = TRUE),
+      se       = sd(value, na.rm = TRUE) / sqrt(n()),
+      .groups  = "drop"
+    ) %>%
+    arrange(treatment_num)
+
+  n_bars <- length(treatment_order)
+
+  ggplot() +
+    geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+             fill = "grey", color = "black", width = 0.9, linewidth = 0.2) +
+
+    geom_errorbar(data = bar_means,
+                  aes(x = treatment_num, ymin = mean_val - se, ymax = mean_val + se),
+                  width = 0.2, linewidth = 0.2, color = "black") +
+
+    geom_point(data = all_data,
+               aes(x = treatment_num, y = value, color = experiment),
+               position = position_jitter(width = 0.2), size = 1,
+               alpha = 0.8, stroke = NA) +
+
+    scale_x_continuous(
+      breaks = bar_means$treatment_num,
+      labels = bar_means$treatment_wrapped,
+      limits = c(0.5, n_bars + 0.5),
+      expand = c(0, 0)
+    ) +
+
+    scale_y_continuous(limits = y_limits,
+                       expand = expansion(mult = c(0, 0.05))) +
+
+    scale_color_manual(values = exp_colors) +
+
+    theme_classic(base_size = 6) +
+    theme(
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 7),
+      axis.text.x  = element_text(size = 6, color = "black"),
+      axis.text.y  = element_text(size = 6, color = "black"),
+      axis.line    = element_line(color = "black", linewidth = 0.3),
+      axis.ticks   = element_line(linewidth = 0.3),
+      plot.margin  = margin(2, 2, 2, 2, "pt"),
+      legend.position = "none"
+    ) +
+    ylab(y_label) +
+    coord_cartesian(clip = "off")
+}
+
+# ---- Build the two panels ----
+p_top <- make_bar_plot(
+  file     = "Data/Fig3Dtop.csv",
+  y_label  = "Top panel label",   # <-- set your y-axis label
+  y_limits = NULL                 # <-- e.g. c(-0.01, 100); NULL = automatic
+)
+
+p_bottom <- make_bar_plot(
+  file     = "Data/Fig3Dbottom.csv",
+  y_label  = expression("Volume of chlorophyll (" * mu * m^3 * ")"),
+  y_limits = c(-0.01, 650)
+)
+
+# ---- Stack and save ----
+fig3d <- ggarrange(p_top, p_bottom, ncol = 1, nrow = 1 + 1, align = "v")
+
+fig3d
+
+ggsave("Fig3D.pdf", plot = fig3d, path = "Figures",
+       width = 2, height = 2.8, units = "in", dpi = 300)
+```
+#Stats for Figure 3D
+```{r}
+# ---- Statistics ----
+run_stats <- function(file) {
+  all_data <- load_data(file)
+  fit <- aov(value ~ treatment, data = all_data)
+  cat("\n=====", file, "=====\n")
+  print(anova(fit))
+  print(TukeyHSD(fit))
+}
+
+run_stats("Data/Fig3Dtop.csv")
+run_stats("Data/Fig3Dbottom.csv")
+```
+
+#Plotting for Figure S7B
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)  # Needed for str_wrap()
+library(scales)
+
+# Load data
+all_data <- as.data.frame(read.csv(
+  file = "Data/FigS7B.csv",
+  header = TRUE
+))
+
+# Convert experiment to factor
+all_data$experiment <- factor(all_data$experiment)
+
+# Convert treatment to factor
+all_data <- all_data %>%
+  mutate(treatment = factor(treatment)) %>%
+  mutate(
+    treatment_wrapped = str_wrap(as.character(treatment), width = 8),
+    treatment_num = as.numeric(treatment)
+  )
+
+# Recalculate bar_means after filtering
+bar_means <- all_data %>%
+  group_by(treatment, treatment_num, treatment_wrapped) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+# Plot
+ggplot() +
+  geom_col(data = bar_means, aes(x = treatment_num, y = mean_val),
+           fill = "grey", color = "black", width = .9, size = 0.2) +
+
+  geom_point(data = all_data,
+             aes(x = treatment_num, y = value, color = experiment),
+             position = position_jitter(width = 0.2), size = 1.4, alpha = 0.8, stroke = NA) +
+
+  stat_summary(data = all_data, aes(x = treatment_num, y = value),
+  fun.data = mean_se, geom = "errorbar", width = 0.2,
+  size = 0.2, color = "black") +
+  
+  scale_x_continuous(
+    breaks = sort(unique(all_data$treatment_num)),
+    labels = bar_means$treatment_wrapped
+  ) +
+
+  scale_y_continuous(
+  limits = c(0, 1.0),
+  expand = expansion(mult = c(0, 0.05)),
+  labels = function(x) x * 100  # Remove percent sign
+) +
+
+  scale_color_manual(values = c("1" = "#0A9F9D", "2" = "#E54E21")) +
+
+  theme_classic(base_size = 6) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 7),
+    axis.text.x = element_text(size = 6, color = "black"),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.line = element_line(color = 'black', size = 0.3),
+    axis.ticks = element_line(size = 0.3),
+    plot.margin = margin(2, 2, 2, 2, "pt"),
+    legend.position = "none"
+  ) +
+  ylab("Expelled algae") 
+# Save the plot
+ggsave("FigS7B.pdf",
+     path = "Figures",
+     width = 2, height = 1.8, units = "in", dpi = 300)
+
+```
+#Stats for Figure S7B
+```{r}
+a <- all_data %>%
+  filter(treatment_wrapped == 'Symbiotic\nalgae') %>%
+  pull(value)
+
+
+b <- all_data %>%
+  filter(treatment_wrapped == 'Free\nalgae') %>%
+  pull(value)
+
+t.test(a,b, var.equal=TRUE, paired = TRUE)
+```
